@@ -1,11 +1,21 @@
-# Craft CMS Exploit Demo – For Bug Bounty Documentation Only
+# Life Organizer
 
-This repository contains proof-of-concept code demonstrating how CVE-2024-56145 
-could be exploited if deployed to a vulnerable Craft CMS instance.
+Money, reading, courses, prayers, Quran, habits and tasks in one offline Android app.
+All data stays on the phone (Settings ⚙️ → Export backup to save a copy).
 
-⚠️ **WARNING**: This code is for educational/documentation purposes only.
-Do not deploy to systems you do not own or have explicit permission to test.
+## Get the APK (no Android Studio needed)
+1. Create a new **private** repo on GitHub.
+2. Push this folder:
+   git init && git add . && git commit -m "Life Organizer"
+   git branch -M main
+   git remote add origin https://github.com/<you>/life-organizer.git
+   git push -u origin main
+3. Open the repo → **Actions** tab → "Build APK" (takes ~3 min).
+4. Open the finished run → **Artifacts** → download `LifeOrganizer-apk` → unzip → `app-debug.apk`.
 
-## CVE References
-- CVE-2024-56145: https://github.com/advisories/GHSA-2p6p-9rc9-62j9
-- CVE-2023-41892: https://github.com/craftcms/cms/security/advisories/GHSA-4w8r-3xrw-v25g
+## Or with Android Studio
+Open this folder → Build → Build APK(s) → app/build/outputs/apk/debug/app-debug.apk
+
+## Change the app
+Everything is in `app/src/main/assets/index.html`. Edit it, push, and Actions builds a new APK.
+Install the new APK over the old one: data is kept as long as the package name stays the same.
