@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Life Organizer</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1c1b19;--muted:#6b6a66;--line:#e6e3dc;--accent:#0f766e;--accent-ink:#fff;--accent-soft:#d9efec;--red:#b42318;--red-soft:#fde2e1;--green:#15803d;--radius:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#121413;--card:#1c1f1e;--ink:#ecebe7;--muted:#9a9993;--line:#2c302e;--accent:#2dd4bf;--accent-ink:#062b27;--accent-soft:#163a36;--red:#f87171;--red-soft:#3b1d1d;--green:#4ade80}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 6px;display:flex;align-items:center;justify-content:space-between;max-width:720px;margin:0 auto}
+header h1{font-size:21px;margin:0}
+main{padding:0 14px 100px;max-width:720px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 2px calc(6px + env(safe-area-inset-bottom));z-index:6}
+nav button{flex:1;background:none;border:0;color:var(--muted);font-size:11px;padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:inherit}
+nav button .i{font-size:20px;line-height:1;filter:grayscale(1);opacity:.7}
+nav button.on{color:var(--accent);font-weight:600}
+nav button.on .i{filter:none;opacity:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin:10px 0}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.row{display:flex;align-items:center;gap:8px}
+.between{justify-content:space-between}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:10px;padding:9px}
+.stat b{display:block;font-size:15px;word-break:break-word}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:9px 14px;font:600 14px/1.2 inherit;cursor:pointer}
+.btn.ghost{background:var(--accent-soft);color:var(--accent)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.danger{background:none;color:var(--red);border:1px solid var(--line)}
+.icon-btn{background:none;border:0;color:var(--ink);font-size:24px;padding:2px 10px;cursor:pointer}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.list .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.list .item:first-child{border-top:0}
+.item .grow{flex:1;min-width:0;cursor:pointer}
+.item .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.pill.red{background:var(--red-soft);color:var(--red)}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:8px 0}
+.tabs button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 12px;font:13px inherit;white-space:nowrap}
+.tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chk{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px}
+.chk button{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:var(--card);font-size:18px;color:var(--accent-ink);cursor:pointer;flex-shrink:0}
+.chk button.on{background:var(--accent);border-color:var(--accent)}
+.dots{display:grid;grid-template-columns:64px repeat(7,1fr);gap:6px 4px;font-size:12px;align-items:center;text-align:center}
+.dot{width:16px;height:16px;border-radius:5px;background:var(--line);margin:auto}
+.dot.on{background:var(--accent)}
+.amt-in{color:var(--green)}.amt-out{color:var(--red)}
+.empty{color:var(--muted);text-align:center;padding:12px 0;font-size:14px}
+.big{font-size:24px;font-weight:700}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{background:var(--card);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto}
+.sheet h3{margin:0 0 6px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:70px;resize:vertical}
+a{color:var(--accent)}
+.toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13.5px;z-index:30;max-width:90vw;text-align:center}
+</style>
+</head>
+<body>
+<header><h1 id="title">Life Organizer</h1><button class="icon-btn" onclick="openSettings()" aria-label="Settings" style="font-size:20px">⚙️</button></header>
+<main id="view"></main>
+<nav>
+  <button data-v="home" onclick="go('home')"><span class="i">🏠</span>Home</button>
+  <button data-v="money" onclick="go('money')"><span class="i">💰</span>Money</button>
+  <button data-v="books" onclick="go('books')"><span class="i">📚</span>Reading</button>
+  <button data-v="learn" onclick="go('learn')"><span class="i">🎓</span>Learning</button>
+  <button data-v="deen" onclick="go('deen')"><span class="i">🕌</span>Deen</button>
+  <button data-v="plan" onclick="go('plan')"><span class="i">✅</span>Plan</button>
+</nav>
+<script>
+/* ---------- data ---------- */
+const KEY = 'lifeos.v1';
+const DEF = {settings:{currency:'JOD', name:'', khatmaStart:null, zSavings:0, zGold:0}, tx:[], books:[], courses:[], deen:{}, habits:[], tasks:[]};
+const clone = o => JSON.parse(JSON.stringify(o));
+function normalize(d){
+  const s = clone(DEF);
+  for (const k of Object.keys(DEF)) if (d && d[k] !== undefined) s[k] = d[k];
+  s.settings = Object.assign({}, DEF.settings, (d && d.settings) || {});
+  return s;
+}
+function load(){ try { const r = localStorage.getItem(KEY); if (r) return normalize(JSON.parse(r)); } catch(e){} return clone(DEF); }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast('Could not save on this device'); } }
+let S = load();
+
+const PR = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
+const EXTRAS = [['am','Morning adhkar'],['pm','Evening adhkar'],['duha','Duha'],['witr','Witr'],['fast','Fasting'],['sadaqah','Sadaqah']];
+const EXP_CATS = ['Food','Groceries','Transport','Bills','Rent','Shopping','Health','Education','Entertainment','Family','Charity','Other'];
+const INC_CATS = ['Salary','Freelance','Gift','Other'];
+const QURAN_PAGES = 604;
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today = () => ymd(new Date());
+const ym = d => ymd(d).slice(0,7);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function addDays(s,n){ const d = new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return ymd(d); }
+function shiftMonth(m,n){ const [y,mo] = m.split('-').map(Number); return ym(new Date(y, mo-1+n, 1)); }
+function monthLabel(m){ const [y,mo] = m.split('-').map(Number); return new Date(y, mo-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
+function dayLabel(s){ return new Date(s+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+function money(n){ return (Math.round((n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + esc(S.settings.currency); }
+function stat(l,v,cls=''){ return `<div class="stat"><span class="muted small">${l}</span><b class="${cls}">${v}</b></div>`; }
+function tabsHtml(tabs,cur,key){ return `<div class="tabs">${tabs.map(([k,l]) => `<button class="${k===cur?'on':''}" onclick="ui.${key}='${k}';render()">${l}</button>`).join('')}</div>`; }
+function toast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 2200); }
+const safeUrl = u => /^https?:\/\//i.test(u||'') ? u : '';
+
+/* ---------- modal + form ---------- */
+let openModal = null;
+function modal(html){
+  closeModal();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) closeModal(); });
+  document.body.appendChild(m); openModal = m; return m;
+}
+function closeModal(){ if (openModal){ openModal.remove(); openModal = null; } }
+function field(f,v){
+  const id = 'f_'+f.k; v = v ?? '';
+  const lab = `<label for="${id}">${esc(f.label)}</label>`;
+  if (f.type === 'select') return lab + `<select id="${id}" name="${f.k}">${f.options.map(o => { const [val,l] = Array.isArray(o)?o:[o,o]; return `<option value="${esc(val)}" ${String(val)===String(v)?'selected':''}>${esc(l)}</option>`; }).join('')}</select>`;
+  if (f.type === 'textarea') return lab + `<textarea id="${id}" name="${f.k}">${esc(v)}</textarea>`;
+  const num = f.type === 'number' ? 'inputmode="decimal" step="any" min="0"' : '';
+  return lab + `<input id="${id}" name="${f.k}" type="${f.type||'text'}" ${num} value="${esc(v)}" ${f.req?'required':''}>`;
+}
+function form(title, fields, init, onSave, onDelete){
+  init = init || {};
+  const m = modal(`<h3>${esc(title)}</h3><form>${fields.map(f => field(f, init[f.k])).join('')}
+    <div class="row" style="margin-top:16px"><button class="btn" type="submit">Save</button><button class="btn ghost" type="button" data-x>Cancel</button><span style="flex:1"></span>${onDelete?'<button class="btn danger" type="button" data-del>Delete</button>':''}</div></form>`);
+  const fm = m.querySelector('form');
+  m.querySelector('[data-x]').onclick = closeModal;
+  if (onDelete){ const b = m.querySelector('[data-del]'); b.onclick = () => { if (b.dataset.sure){ onDelete(); save(); closeModal(); render(); } else { b.dataset.sure = 1; b.textContent = 'Tap to confirm'; } }; }
+  fm.onsubmit = e => {
+    e.preventDefault(); const v = {};
+    for (const f of fields){ let x = fm.elements[f.k].value.trim(); if (f.type==='number' || f.num) x = x==='' ? null : Number(x); v[f.k] = x; }
+    if (onSave(v) === false) return;
+    save(); closeModal(); render();
+  };
+}
+
+/* ---------- navigation ---------- */
+let view = 'home';
+const ui = {month: ym(new Date()), bookTab:'reading', courseTab:'active', deenDate: today(), showDone:false};
+const TITLES = {home:'Life Organizer', money:'Money', books:'Reading', learn:'Learning', deen:'Deen', plan:'Habits & Tasks'};
+function go(v){ view = v; if (v==='deen') ui.deenDate = today(); render(); window.scrollTo(0,0); }
+function render(){
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  $('#title').textContent = TITLES[view];
+  $('#view').innerHTML = VIEWS[view]();
+}
+window.handleBack = function(){ if (openModal){ closeModal(); return true; } if (view !== 'home'){ go('home'); return true; } return false; };
+
+/* ---------- home ---------- */
+function vHome(){
+  const t = today(), r = S.deen[t] || {}, n = PR.filter(p => r[p[0]]).length;
+  const m = monthTotals(ym(new Date()));
+  const reading = S.books.filter(b => b.status === 'reading');
+  const courses = S.courses.filter(c => c.status === 'active');
+  const tasks = S.tasks.filter(x => !x.done).sort(byDue).slice(0,5);
+  const h = new Date().getHours(), greet = h<12 ? 'Good morning' : h<18 ? 'Good afternoon' : 'Good evening';
+  return `<p class="muted" style="margin:2px 2px 0">${greet}${S.settings.name ? ', '+esc(S.settings.name) : ''} · ${dayLabel(t)}</p>
+  <div class="card"><h2>Prayers today <span class="pill">${n}/5</span></h2>${prayerRow(t)}</div>
+  <div class="card" onclick="go('money')" style="cursor:pointer"><h2>This month <span class="muted small">${monthLabel(ym(new Date()))}</span></h2>
+    <div class="grid3">${stat('Income', money(m.inc), 'amt-in')}${stat('Spent', money(m.exp), 'amt-out')}${stat('Left', money(m.inc-m.exp))}</div></div>
+  <div class="card"><h2>Today's habits <button class="btn sm ghost" onclick="go('plan')">Manage</button></h2><div class="list">${S.habits.length ? S.habits.map(habitItem).join('') : '<div class="empty">No habits yet. Add some in Plan.</div>'}</div></div>
+  <div class="card"><h2>Reading</h2><div class="list">${reading.length ? reading.slice(0,3).map(bookItem).join('') : '<div class="empty">Not reading anything right now</div>'}</div></div>
+  <div class="card"><h2>Learning</h2><div class="list">${courses.length ? courses.slice(0,3).map(courseItem).join('') : '<div class="empty">No active courses</div>'}</div></div>
+  <div class="card"><h2>Next tasks <button class="btn sm ghost" onclick="editTask()">+ Task</button></h2><div class="list">${tasks.length ? tasks.map(taskItem).join('') : '<div class="empty">All clear</div>'}</div></div>`;
+}
+
+/* ---------- money ---------- */
+function monthTotals(m){
+  let inc = 0, exp = 0; const cats = {};
+  for (const x of S.tx){ if (!x.date || !x.date.startsWith(m)) continue;
+    if (x.type === 'income') inc += x.amount; else { exp += x.amount; cats[x.cat] = (cats[x.cat]||0) + x.amount; } }
+  return {inc, exp, cats};
+}
+function vMoney(){
+  const m = ui.month, t = monthTotals(m);
+  const list = S.tx.filter(x => x.date && x.date.startsWith(m)).sort((a,b) => b.date.localeCompare(a.date));
+  const cats = Object.entries(t.cats).sort((a,b) => b[1]-a[1]), max = cats.length ? cats[0][1] : 1;
+  const prev = monthTotals(shiftMonth(m,-1)).exp;
+  const diff = prev ? Math.round((t.exp-prev)/prev*100) : null;
+  return `<div class="card row between" style="padding:6px"><button class="icon-btn" onclick="ui.month=shiftMonth(ui.month,-1);render()">‹</button><b>${monthLabel(m)}</b><button class="icon-btn" onclick="ui.month=shiftMonth(ui.month,1);render()">›</button></div>
+  <div class="card"><div class="grid3">${stat('Income', money(t.inc), 'amt-in')}${stat('Spent', money(t.exp), 'amt-out')}${stat('Left', money(t.inc-t.exp))}</div>
+    ${diff!==null ? `<p class="small muted" style="margin:10px 0 0">Spending is ${Math.abs(diff)}% ${diff>=0?'higher':'lower'} than last month.</p>` : ''}</div>
+  <div class="row" style="margin:12px 0"><button class="btn" onclick="editTx(null,'expense')">− Add expense</button><button class="btn ghost" onclick="editTx(null,'income')">+ Add income</button></div>
+  <div class="card"><h2>Where the money went</h2>${cats.length ? cats.map(([c,v]) => `<div style="margin:9px 0"><div class="row between small"><span>${esc(c)}</span><span>${money(v)} · ${Math.round(v/t.exp*100)}%</span></div><div class="bar" style="margin-top:4px"><i style="width:${v/max*100}%"></i></div></div>`).join('') : '<div class="empty">No expenses this month</div>'}</div>
+  <div class="card"><h2>Transactions <span class="muted small">${list.length}</span></h2><div class="list">${list.map(txItem).join('') || '<div class="empty">Nothing yet</div>'}</div></div>
+  ${zakatCard()}`;
+}
+function txItem(x){
+  const inc = x.type === 'income';
+  return `<div class="item" onclick="editTx('${x.id}')" style="cursor:pointer"><div class="grow"><div class="title">${esc(x.note || x.cat)}</div><div class="muted small">${esc(x.cat)} · ${dayLabel(x.date)}</div></div><b class="${inc?'amt-in':'amt-out'}" style="white-space:nowrap">${inc?'+':'−'}${money(x.amount)}</b></div>`;
+}
+function editTx(id, type){
+  const x = id ? S.tx.find(t => t.id === id) : {type, date: ui.month === ym(new Date()) ? today() : ui.month+'-01', cat: type==='income' ? 'Salary' : 'Food'};
+  const tp = x.type;
+  form(id ? (tp==='income' ? 'Edit income' : 'Edit expense') : (tp==='income' ? 'Add income' : 'Add expense'), [
+    {k:'amount', label:`Amount (${S.settings.currency})`, type:'number', req:1},
+    {k:'cat', label:'Category', type:'select', options: tp==='income' ? INC_CATS : EXP_CATS},
+    {k:'date', label:'Date', type:'date', req:1},
+    {k:'note', label:'Note (optional)'}
+  ], x, v => {
+    if (!(v.amount > 0)){ toast('Enter an amount above 0'); return false; }
+    if (id) Object.assign(x, v); else S.tx.push({id: uid(), type: tp, ...v});
+  }, id ? () => { S.tx = S.tx.filter(t => t.id !== id); } : null);
+}
+function zakatCard(){
+  const z = S.settings, sav = +z.zSavings || 0, gp = +z.zGold || 0, nisab = gp * 85;
+  return `<div class="card"><h2>Zakat calculator</h2>
+  <label>Savings you have held for a full lunar year (${esc(z.currency)})</label><input type="number" inputmode="decimal" min="0" step="any" value="${sav || ''}" onchange="S.settings.zSavings=+this.value;save();render()">
+  <label>Gold price per gram, 24k (${esc(z.currency)})</label><input type="number" inputmode="decimal" min="0" step="any" value="${gp || ''}" onchange="S.settings.zGold=+this.value;save();render()">
+  <p class="small" style="margin-bottom:0">${!gp ? '<span class="muted">Enter today\'s gold price to work out the nisab (85 g of gold).</span>' :
+    `Nisab: <b>${money(nisab)}</b><br>${sav >= nisab ? `Zakat due (2.5%): <b class="amt-out">${money(sav*0.025)}</b>` : 'Your savings are below the nisab, so no zakat is due on them.'}`}</p></div>`;
+}
+
+/* ---------- books ---------- */
+function vBooks(){
+  const yr = String(new Date().getFullYear());
+  const doneYr = S.books.filter(b => b.status==='done' && (b.finished||'').startsWith(yr)).length;
+  const list = S.books.filter(b => ui.bookTab==='all' || b.status===ui.bookTab);
+  return `<div class="card row between"><div><span class="big">${doneYr}</span> <span class="muted">books finished in ${yr}</span></div><button class="btn" onclick="editBook()">+ Book</button></div>
+  ${tabsHtml([['reading','Reading'],['want','Want to read'],['done','Finished'],['all','All']], ui.bookTab, 'bookTab')}
+  <div class="card"><div class="list">${list.map(bookItem).join('') || '<div class="empty">No books here yet</div>'}</div></div>`;
+}
+function bookItem(b){
+  const p = b.pages ? Math.min(100, Math.round((b.current||0)/b.pages*100)) : 0;
+  let sub = esc(b.author || '');
+  if (b.status === 'done') sub += (sub?' · ':'') + 'Finished' + (b.rating ? ' · ' + '★'.repeat(b.rating) : '');
+  else if (b.pages) sub += (sub?' · ':'') + `${b.current||0}/${b.pages} pages`;
+  const action = b.status==='reading' ? `<button class="btn sm ghost" onclick="logPages('${b.id}')">Update</button>` : b.status==='want' ? `<button class="btn sm ghost" onclick="startBook('${b.id}')">Start</button>` : '';
+  return `<div class="item"><div class="grow" onclick="editBook('${b.id}')"><div class="title">${esc(b.title)}</div><div class="muted small">${sub}</div>${b.status==='reading' && b.pages ? `<div class="bar" style="margin-top:6px"><i style="width:${p}%"></i></div>` : ''}</div>${action}</div>`;
+}
+function editBook(id){
+  const b = id ? S.books.find(x => x.id === id) : {status: ui.bookTab==='all' ? 'reading' : ui.bookTab};
+  form(id ? 'Edit book' : 'Add book', [
+    {k:'title', label:'Title', req:1}, {k:'author', label:'Author'},
+    {k:'status', label:'Status', type:'select', options:[['want','Want to read'],['reading','Reading'],['done','Finished']]},
+    {k:'pages', label:'Total pages', type:'number'}, {k:'current', label:'Current page', type:'number'},
+    {k:'rating', label:'Rating', type:'select', num:1, options:[['0','—'],['1','★'],['2','★★'],['3','★★★'],['4','★★★★'],['5','★★★★★']]},
+    {k:'notes', label:'Notes / key ideas', type:'textarea'}
+  ], b, v => {
+    if (!v.title){ toast('Add a title'); return false; }
+    if (v.status==='done' && !b.finished) v.finished = today();
+    if (v.status==='reading' && !b.started) v.started = today();
+    if (id) Object.assign(b, v); else S.books.push({id: uid(), ...v});
+  }, id ? () => { S.books = S.books.filter(x => x.id !== id); } : null);
+}
+function startBook(id){ const b = S.books.find(x => x.id === id); b.status = 'reading'; b.started = today(); save(); render(); toast('Moved to Reading'); }
+function logPages(id){
+  const b = S.books.find(x => x.id === id);
+  form('Where are you now?', [{k:'current', label: b.pages ? `Current page (of ${b.pages})` : 'Current page', type:'number', req:1}], b, v => {
+    b.current = v.current || 0;
+    if (b.pages && b.current >= b.pages){ b.status = 'done'; b.finished = today(); setTimeout(() => toast('Book finished! 🎉'), 50); }
+  });
+}
+
+/* ---------- learning ---------- */
+function vLearn(){
+  const done = S.courses.filter(c => c.status==='done').length, act = S.courses.filter(c => c.status==='active').length;
+  const list = S.courses.filter(c => ui.courseTab==='all' || c.status===ui.courseTab);
+  return `<div class="card row between"><div><span class="big">${act}</span> <span class="muted">in progress · ${done} completed</span></div><button class="btn" onclick="editCourse()">+ Course</button></div>
+  ${tabsHtml([['active','In progress'],['planned','Planned'],['done','Completed'],['all','All']], ui.courseTab, 'courseTab')}
+  <div class="card"><div class="list">${list.map(courseItem).join('') || '<div class="empty">No courses here yet</div>'}</div></div>`;
+}
+function courseItem(c){
+  const p = c.total ? Math.min(100, Math.round((c.done||0)/c.total*100)) : 0, url = safeUrl(c.link);
+  const sub = [esc(c.platform||''), c.total ? `${c.done||0}/${c.total} lessons` : '', url ? `<a href="${esc(url)}" target="_blank" onclick="event.stopPropagation()">Open</a>` : ''].filter(Boolean).join(' · ');
+  return `<div class="item"><div class="grow" onclick="editCourse('${c.id}')"><div class="title">${esc(c.title)}</div><div class="muted small">${sub}</div>${c.total && c.status!=='planned' ? `<div class="bar" style="margin-top:6px"><i style="width:${p}%"></i></div>` : ''}</div>${c.status==='active' && c.total ? `<button class="btn sm ghost" onclick="plusLesson('${c.id}')">+1</button>` : ''}</div>`;
+}
+function editCourse(id){
+  const c = id ? S.courses.find(x => x.id === id) : {status: ui.courseTab==='all' ? 'active' : ui.courseTab};
+  form(id ? 'Edit course' : 'Add course', [
+    {k:'title', label:'Course / skill', req:1}, {k:'platform', label:'Platform (Udemy, Coursera, TryHackMe…)'},
+    {k:'link', label:'Link', type:'url'},
+    {k:'total', label:'Total lessons / modules', type:'number'}, {k:'done', label:'Completed lessons', type:'number'},
+    {k:'status', label:'Status', type:'select', options:[['planned','Planned'],['active','In progress'],['done','Completed']]},
+    {k:'notes', label:'Notes', type:'textarea'}
+  ], c, v => {
+    if (!v.title){ toast('Add a title'); return false; }
+    if (id) Object.assign(c, v); else S.courses.push({id: uid(), ...v});
+  }, id ? () => { S.courses = S.courses.filter(x => x.id !== id); } : null);
+}
+function plusLesson(id){
+  const c = S.courses.find(x => x.id === id); c.done = (c.done||0) + 1;
+  if (c.total && c.done >= c.total){ c.status = 'done'; c.finished = today(); toast('Course completed! 🎓'); }
+  save(); render();
+}
+
+/* ---------- deen ---------- */
+function rec(d){ return S.deen[d] || (S.deen[d] = {}); }
+function toggleDeen(d,k){ const r = rec(d); r[k] = !r[k]; save(); render(); }
+function addQuran(d,n){ const r = rec(d); r.quran = Math.max(0, (r.quran||0) + n); save(); render(); }
+function prayerRow(d){
+  const r = S.deen[d] || {};
+  return `<div class="row between">${PR.map(([k,l]) => `<div class="chk"><button class="${r[k]?'on':''}" onclick="toggleDeen('${d}','${k}')" aria-label="${l}">${r[k]?'✓':''}</button>${l}</div>`).join('')}</div>`;
+}
+function vDeen(){
+  const d = ui.deenDate, r = S.deen[d] || {}, isToday = d >= today();
+  return `<div class="card row between" style="padding:6px"><button class="icon-btn" onclick="ui.deenDate=addDays(ui.deenDate,-1);render()">‹</button><b>${d===today() ? 'Today' : dayLabel(d)}</b><button class="icon-btn" ${isToday ? 'disabled style="opacity:.25"' : ''} onclick="ui.deenDate=addDays(ui.deenDate,1);render()">›</button></div>
+  <div class="card"><h2>Prayers <span class="pill">${PR.filter(p => r[p[0]]).length}/5</span></h2>${prayerRow(d)}</div>
+  <div class="card"><h2>Quran</h2><div class="row between"><span>Pages read</span><div class="row"><button class="btn sm ghost" onclick="addQuran('${d}',-1)">−</button><b style="min-width:30px;text-align:center">${r.quran||0}</b><button class="btn sm ghost" onclick="addQuran('${d}',1)">+1</button><button class="btn sm ghost" onclick="addQuran('${d}',5)">+5</button><button class="btn sm ghost" onclick="addQuran('${d}',20)">+20</button></div></div>${khatmaHtml()}</div>
+  <div class="card"><h2>Daily good deeds</h2><div class="list">${EXTRAS.map(([k,l]) => `<div class="item" onclick="toggleDeen('${d}','${k}')" style="cursor:pointer"><div class="grow">${l}</div><span class="chk"><button class="${r[k]?'on':''}" style="width:30px;height:30px;font-size:14px">${r[k]?'✓':''}</button></span></div>`).join('')}</div></div>
+  ${weekGrid()}${monthDeen()}`;
+}
+function khatmaHtml(){
+  const st = S.settings.khatmaStart;
+  if (!st) return `<p class="small muted">Track a full khatma (${QURAN_PAGES} pages).</p><button class="btn sm" onclick="startKhatma()">Start a khatma</button>`;
+  let pages = 0; for (const [d,r] of Object.entries(S.deen)) if (d >= st) pages += r.quran || 0;
+  const p = Math.min(100, pages/QURAN_PAGES*100);
+  return `<div style="margin-top:14px"><div class="row between small"><span>Khatma since ${dayLabel(st)}</span><span>${Math.min(pages,QURAN_PAGES)}/${QURAN_PAGES}</span></div><div class="bar" style="margin-top:5px"><i style="width:${p}%"></i></div>
+  ${pages >= QURAN_PAGES ? `<p class="small"><b>Khatma complete. الحمد لله</b> <button class="btn sm" onclick="startKhatma()">Start new</button></p>` : `<p class="small muted" style="margin:6px 0 0">${QURAN_PAGES-pages} pages left · <a href="#" onclick="startKhatma();return false">restart</a></p>`}</div>`;
+}
+function startKhatma(){ S.settings.khatmaStart = today(); save(); render(); toast('New khatma started'); }
+function weekGrid(){
+  const days = [...Array(7)].map((_,i) => addDays(today(), i-6));
+  const rows = [...PR.map(([k,l]) => [l, r => r[k]]), ['Quran', r => r.quran > 0], ['Adhkar', r => r.am || r.pm]];
+  return `<div class="card"><h2>Last 7 days</h2><div class="dots"><span></span>${days.map(d => `<span class="muted">${new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'narrow'})}</span>`).join('')}
+  ${rows.map(([l,f]) => `<span style="text-align:left">${l}</span>${days.map(d => `<span class="dot ${f(S.deen[d]||{})?'on':''}"></span>`).join('')}`).join('')}</div></div>`;
+}
+function monthDeen(){
+  const m = ym(new Date());
+  let pr = 0, q = 0, f = 0, first = 99;
+  for (const [d,r] of Object.entries(S.deen)) if (d.startsWith(m)){ pr += PR.filter(p => r[p[0]]).length; q += r.quran||0; if (r.fast) f++; first = Math.min(first, +d.slice(8)); }
+  const days = Math.max(1, new Date().getDate() - (first === 99 ? new Date().getDate() : first) + 1); // count from the first day you tracked
+  return `<div class="card"><h2>This month</h2><div class="grid3">${stat('Prayers', Math.round(pr/(days*5)*100)+'%')}${stat('Quran pages', q)}${stat('Fasting days', f)}</div></div>`;
+}
+
+/* ---------- habits + tasks ---------- */
+function streak(h){ let d = today(), n = 0; if (!h.log[d]) d = addDays(d,-1); while (h.log[d]){ n++; d = addDays(d,-1); } return n; }
+function habitItem(h){
+  const on = !!h.log[today()], s = streak(h);
+  return `<div class="item"><div class="grow" onclick="editHabit('${h.id}')"><div class="title">${esc(h.name)}</div><div class="muted small">${s ? `🔥 ${s} day streak` : 'No streak yet'}</div></div><span class="chk"><button class="${on?'on':''}" style="width:36px;height:36px" onclick="toggleHabit('${h.id}')" aria-label="Done today">${on?'✓':''}</button></span></div>`;
+}
+function toggleHabit(id){ const h = S.habits.find(x => x.id === id), t = today(); if (h.log[t]) delete h.log[t]; else h.log[t] = 1; save(); render(); }
+function editHabit(id){
+  const h = id ? S.habits.find(x => x.id === id) : {};
+  form(id ? 'Edit habit' : 'New habit', [{k:'name', label:'Habit (e.g. Gym, Study 1 hour, No sugar)', req:1}], h, v => {
+    if (!v.name){ toast('Name the habit'); return false; }
+    if (id) h.name = v.name; else S.habits.push({id: uid(), name: v.name, log: {}});
+  }, id ? () => { S.habits = S.habits.filter(x => x.id !== id); } : null);
+}
+const byDue = (a,b) => (a.due||'9999').localeCompare(b.due||'9999') || ((b.prio==='high') - (a.prio==='high'));
+function taskItem(x){
+  const late = !x.done && x.due && x.due < today();
+  return `<div class="item"><span class="chk"><button class="${x.done?'on':''}" style="width:28px;height:28px;font-size:13px" onclick="toggleTask('${x.id}')" aria-label="Done">${x.done?'✓':''}</button></span>
+  <div class="grow" onclick="editTask('${x.id}')"><div class="title" style="${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.title)}</div>${x.due ? `<div class="small ${late?'amt-out':'muted'}">${x.due===today() ? 'Today' : (late?'Overdue · ':'') + dayLabel(x.due)}</div>` : ''}</div>${x.prio==='high' ? '<span class="pill red">High</span>' : ''}</div>`;
+}
+function toggleTask(id){ const x = S.tasks.find(t => t.id === id); x.done = !x.done; x.doneAt = x.done ? today() : null; save(); render(); }
+function editTask(id){
+  const x = id ? S.tasks.find(t => t.id === id) : {prio:'normal'};
+  form(id ? 'Edit task' : 'New task', [
+    {k:'title', label:'Task', req:1}, {k:'due', label:'Due date (optional)', type:'date'},
+    {k:'prio', label:'Priority', type:'select', options:[['normal','Normal'],['high','High']]}
+  ], x, v => {
+    if (!v.title){ toast('Write the task'); return false; }
+    if (id) Object.assign(x, v); else S.tasks.push({id: uid(), done: false, ...v});
+  }, id ? () => { S.tasks = S.tasks.filter(t => t.id !== id); } : null);
+}
+function vPlan(){
+  const open = S.tasks.filter(x => !x.done).sort(byDue), done = S.tasks.filter(x => x.done);
+  return `<div class="card"><h2>Habits <button class="btn sm" onclick="editHabit()">+ Habit</button></h2><div class="list">${S.habits.map(habitItem).join('') || '<div class="empty">Add habits you want to build every day</div>'}</div></div>
+  <div class="card"><h2>Tasks <button class="btn sm" onclick="editTask()">+ Task</button></h2><div class="list">${open.map(taskItem).join('') || '<div class="empty">No open tasks</div>'}</div>
+  ${done.length ? `<p style="margin:10px 0 0"><a href="#" onclick="ui.showDone=!ui.showDone;render();return false">${ui.showDone?'Hide':'Show'} completed (${done.length})</a> · <a href="#" onclick="clearDone();return false">Clear completed</a></p>${ui.showDone ? `<div class="list">${done.map(taskItem).join('')}</div>` : ''}` : ''}</div>`;
+}
+function clearDone(){ S.tasks = S.tasks.filter(x => !x.done); save(); render(); }
+
+/* ---------- settings + backup ---------- */
+function openSettings(){
+  const m = modal(`<h3>Settings</h3>
+    <label>Your name</label><input id="s_name" value="${esc(S.settings.name)}">
+    <label>Currency</label><input id="s_cur" value="${esc(S.settings.currency)}" placeholder="JOD, SAR, QAR, USD…">
+    <div class="row" style="margin-top:14px"><button class="btn" id="s_save">Save</button><button class="btn ghost" onclick="closeModal()">Close</button></div>
+    <h3 style="margin-top:22px">Backup</h3>
+    <p class="small muted" style="margin-top:0">Everything is stored only on this device. Export a backup regularly (for example to Google Drive or Telegram Saved Messages).</p>
+    <div class="row"><button class="btn ghost" onclick="exportData()">Export backup</button><button class="btn ghost" onclick="importData()">Import backup</button></div>
+    <h3 style="margin-top:22px">Danger zone</h3><button class="btn danger" id="s_reset">Erase all data</button>`);
+  m.querySelector('#s_save').onclick = () => { S.settings.name = m.querySelector('#s_name').value.trim(); S.settings.currency = m.querySelector('#s_cur').value.trim() || 'JOD'; save(); closeModal(); render(); toast('Saved'); };
+  const rb = m.querySelector('#s_reset');
+  rb.onclick = () => { if (rb.dataset.sure){ S = clone(DEF); save(); closeModal(); go('home'); toast('All data erased'); } else { rb.dataset.sure = 1; rb.textContent = 'Tap again to erase everything'; } };
+}
+function exportData(){
+  const json = JSON.stringify(S);
+  if (window.AndroidBridge && AndroidBridge.shareText){ AndroidBridge.shareText(json); return; }
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+    a.download = 'life-organizer-backup-' + today() + '.json';
+    document.body.appendChild(a); a.click(); a.remove(); toast('Backup downloaded');
+  } catch(e){ if (navigator.clipboard) navigator.clipboard.writeText(json).then(() => toast('Backup copied to clipboard')); }
+}
+function importData(){
+  const m = modal(`<h3>Import backup</h3><p class="small muted">Choose a backup file, or paste the backup text. This replaces the data on this device.</p>
+    <input type="file" id="i_file" accept=".json,application/json,text/plain"><label>…or paste backup text</label><textarea id="i_txt"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn" id="i_go">Import</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+  const apply = txt => {
+    try { const d = JSON.parse(txt); if (!d || !Array.isArray(d.tx) || !d.settings) throw 0; S = normalize(d); save(); closeModal(); go('home'); toast('Backup restored'); }
+    catch(e){ toast('That does not look like a Life Organizer backup'); }
+  };
+  m.querySelector('#i_go').onclick = () => {
+    const f = m.querySelector('#i_file').files[0];
+    if (f){ const r = new FileReader(); r.onload = () => apply(r.result); r.readAsText(f); }
+    else apply(m.querySelector('#i_txt').value);
+  };
+}
+
+const VIEWS = {home: vHome, money: vMoney, books: vBooks, learn: vLearn, deen: vDeen, plan: vPlan};
+render();
+</script>
+</body>
+</html>
