@@ -1,6 +1,8 @@
 # Life Organizer
 
 Money, reading, courses, prayers, Quran, habits and tasks in one offline Android app.
+
+**v2:** Calendar & history of everything you log (heat map, day details, mood + notes), a Money section that works like a financial advisor (health score, insights, 50/30/20, budgets, goals + emergency fund, fixed costs, debts, CSV export), weekly one focus, focus timer and brain dump.
 All data stays on the phone (Settings ⚙️ → Export backup to save a copy).
 
 ## Get the APK (no Android Studio needed)
