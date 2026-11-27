@@ -113,20 +113,27 @@ a{color:var(--accent)}
 /* ---------- data ---------- */
 const KEY = 'lifeos.v1';   // same key as v1, so existing data carries over
 const DEF = {
-  settings:{currency:'JOD', name:'', khatmaStart:null, zSavings:0, zGold:0, weekStart:6, efMonths:6},
+  settings:{currency:'JOD', name:'', khatmaStart:null, zSavings:0, zGold:0, weekStart:6, efMonths:6,
+    notif:{on:false, lang:'ar', morning:'08:00', evening:'21:30', quit:true, focus:true, money:true}},
   tx:[], books:[], courses:[], deen:{}, habits:[], tasks:[],
   budgets:{}, goals:[], recurring:[], debts:[],
-  events:[], journal:{}, inbox:[], focus:{}, timer:null
+  events:[], journal:{}, inbox:[], focus:{}, timer:null, quits:[]
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function normalize(d){
-  const s = clone(DEF);
+  const s = clone(DEF), ds = (d && d.settings) || {};
   for (const k of Object.keys(DEF)) if (d && d[k] !== undefined && d[k] !== null) s[k] = d[k];
-  s.settings = Object.assign({}, DEF.settings, (d && d.settings) || {});
+  s.settings = Object.assign(clone(DEF.settings), ds);
+  s.settings.notif = Object.assign(clone(DEF.settings.notif), ds.notif || {});
+  for (const q of s.quits){ q.slips = q.slips || []; q.urges = q.urges || {}; q.clean = q.clean || {}; }
   return s;
 }
 function load(){ try { const r = localStorage.getItem(KEY); if (r) return normalize(JSON.parse(r)); } catch(e){} return clone(DEF); }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast('Could not save on this device'); } }
+let syncT = null;
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast('Could not save on this device'); }
+  clearTimeout(syncT); syncT = setTimeout(syncNotifs, 1200);   // keep notification texts in step with your data
+}
 let S = load();
 
 const PR = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
@@ -138,7 +145,9 @@ const GIVING = new Set(['Charity']);
 const bucket = c => NEEDS.has(c) ? 'needs' : GIVING.has(c) ? 'giving' : 'wants';
 const QURAN_PAGES = 604;
 const MOODS = ['😞','😕','😐','🙂','😄'], MOOD_L = ['Low','Down','Okay','Good','Great'];
-const CAT = {deen:['Deen','#0d9488'], money:['Money','#d97706'], habit:['Habits','#7c3aed'], task:['Tasks','#2563eb'], book:['Reading','#db2777'], learn:['Learning','#0891b2'], focus:['Focus','#65a30d'], mood:['Mood','#eab308']};
+const CAT = {deen:['Deen','#0d9488'], money:['Money','#d97706'], habit:['Habits','#7c3aed'], task:['Tasks','#2563eb'], book:['Reading','#db2777'], learn:['Learning','#0891b2'], focus:['Focus','#65a30d'], quit:['Break habits','#e11d48'], mood:['Mood','#eab308']};
+const MILES = [1,3,7,14,21,30,60,90,180,365,730];
+const TRIGGERS = ['Boredom','Stress','Tired','Alone','Phone / social media','People around me','Time of day / routine','Sad or upset','Celebrating','Other'];
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -214,7 +223,7 @@ function shareOrDownload(text, filename, mime){
 /* ---------- navigation ---------- */
 let view = 'home';
 const ui = {month: ym(new Date()), bookTab:'reading', courseTab:'active', deenDate: today(), showDone:false,
-  moneyTab:'overview', txType:'all', txq:'', calMonth: ym(new Date()), calMode:'cal', calFilter:'all', histLimit:30};
+  moneyTab:'overview', txType:'all', txq:'', calMonth: ym(new Date()), calMode:'cal', calFilter:'all', histLimit:30, planTab:'build', qMonth:null};
 const TITLES = {home:'Life Organizer', cal:'Calendar & History', money:'Money', books:'Reading', learn:'Learning', deen:'Deen', plan:'Plan & Focus'};
 function go(v, keep){ view = v; if (v==='deen' && !keep) ui.deenDate = today(); render(); window.scrollTo(0,0); }
 function render(){
@@ -247,6 +256,12 @@ function buildIndex(){
   }
   for (const c of S.courses) if (c.status==='done' && c.finished) add(c.finished, {c:'learn', t:'Completed · '+c.title, w:2});
   for (const e of S.events) add(e.date, {c:e.type, t:e.text, w:1});
+  for (const q of S.quits){
+    for (const d of Object.keys(q.clean)) add(d, {c:'quit', t:'Clean ✓ · '+q.name, w:1});
+    for (const [d,n] of Object.entries(q.urges)) add(d, {c:'quit', t:`Resisted ${n} urge${n>1?'s':''} · ${q.name}`, w:1});
+    for (const s of q.slips) add(s.date, {c:'quit', t:'Slipped · '+q.name + (s.trigger ? ` (${s.trigger})` : ''), w:0});
+    const n = qStreak(q); if (MILES.includes(n)) add(today(), {c:'quit', t:`🏅 ${n} days clean · ${q.name}`, w:0});
+  }
   for (const [d,j] of Object.entries(S.journal)) if (j && (j.mood || j.note)) add(d, {c:'mood', t:(j.mood ? MOODS[j.mood-1]+' '+MOOD_L[j.mood-1] : 'Note') + (j.note ? ' · ' + j.note : ''), w:0});
   return idx;
 }
@@ -282,6 +297,7 @@ function vHome(){
   return `<p class="muted" style="margin:2px 2px 0">${greet}${S.settings.name ? ', '+esc(S.settings.name) : ''} · ${dayLabel(t)}</p>
   ${moodCard(t)}
   ${focusCard()}
+  ${S.quits.length ? `<div class="card" onclick="ui.planTab='quit';go('plan')" style="cursor:pointer"><h2>Breaking habits <span class="muted small">Details ›</span></h2>${S.quits.map(q => `<div class="row between" style="padding:4px 0"><span class="title" style="font-weight:600">${esc(q.name)}</span><span><b>${qStreak(q)}</b> <span class="muted small">days clean</span></span></div>${quitWeek(q)}`).join('')}</div>` : ''}
   <div class="card"><h2>Prayers today <span class="pill">${n}/5</span></h2>${prayerRow(t)}</div>
   <div class="card"><h2>Today's habits <button class="btn sm ghost" onclick="go('plan')">Manage</button></h2><div class="list">${S.habits.length ? S.habits.map(x => habitItem(x)).join('') : '<div class="empty">No habits yet. Add some in Plan.</div>'}</div></div>
   <div class="card" onclick="go('money')" style="cursor:pointer"><h2>This month <span class="muted small">${monthLabel(cm)}</span></h2>
@@ -848,13 +864,251 @@ function editTask(id, due){
   }, id ? () => { S.tasks = S.tasks.filter(t => t.id !== id); } : null);
 }
 function vPlan(){
+  const tabs = tabsHtml([['build','Habits & tasks'],['quit','Break habits'],['focus','Focus']], ui.planTab, 'planTab');
+  if (ui.planTab === 'quit') return tabs + vQuit();
+  if (ui.planTab === 'focus') return tabs + timerCard() + inboxCard();
   const live = S.tasks.filter(x => !x.archived), open = live.filter(x => !x.done).sort(byDue), done = live.filter(x => x.done);
-  return `${timerCard()}
+  return `${tabs}
   <div class="card"><h2>Habits <button class="btn sm" onclick="editHabit()">+ Habit</button></h2><div class="list">${S.habits.map(h => habitItem(h, true)).join('') || '<div class="empty">Add habits you want to build every day</div>'}</div></div>
   <div class="card"><h2>Tasks <button class="btn sm" onclick="editTask()">+ Task</button></h2><div class="list">${open.map(taskItem).join('') || '<div class="empty">No open tasks</div>'}</div>
-  ${done.length ? `<p style="margin:10px 0 0"><a href="#" onclick="ui.showDone=!ui.showDone;render();return false">${ui.showDone?'Hide':'Show'} completed (${done.length})</a> · <a href="#" onclick="clearDone();return false">Clear completed</a></p>${ui.showDone ? `<div class="list">${done.map(taskItem).join('')}</div>` : ''}` : ''}</div>
-  ${inboxCard()}`;
+  ${done.length ? `<p style="margin:10px 0 0"><a href="#" onclick="ui.showDone=!ui.showDone;render();return false">${ui.showDone?'Hide':'Show'} completed (${done.length})</a> · <a href="#" onclick="clearDone();return false">Clear completed</a></p>${ui.showDone ? `<div class="list">${done.map(taskItem).join('')}</div>` : ''}` : ''}</div>`;
 }
+
+/* ---------- break bad habits ---------- */
+function daysBetween(a,b){ return Math.round((new Date(b+'T12:00:00') - new Date(a+'T12:00:00')) / 864e5); }
+function qStreak(q, at){ at = at || today(); const s = q.slips.map(x => x.date).filter(d => d <= at).sort(); const from = s.length ? s[s.length-1] : q.start; return Math.max(0, daysBetween(from > at ? at : from, at)); }
+function qBest(q){ const pts = [q.start, ...q.slips.map(x => x.date).filter(d => d >= q.start).sort(), today()]; let b = 0; for (let i = 1; i < pts.length; i++) b = Math.max(b, daysBetween(pts[i-1], pts[i])); return b; }
+function qCleanDays(q){ return Math.max(0, daysBetween(q.start, today()) + 1 - new Set(q.slips.map(x => x.date)).size); }
+const qUrgeTotal = q => Object.values(q.urges).reduce((a,b) => a + b, 0);
+const nextMile = n => MILES.find(m => m > n) || n + 365;
+function qStatus(q, d){
+  if (d < q.start || d > today()) return 'none';
+  if (q.slips.some(s => s.date === d)) return 'slip';
+  if (q.urges[d]) return 'urge';
+  return q.clean[d] ? 'clean' : 'implied';
+}
+const Q_COL = {slip:'var(--red)', urge:'var(--amber)', clean:'var(--green)', implied:'var(--green)', none:'var(--line)'};
+function quitWeek(q){
+  const days = [...Array(14)].map((_,i) => addDays(today(), i-13));
+  return `<div class="mini">${days.map(d => { const s = qStatus(q,d); return `<i style="background:${Q_COL[s]};opacity:${s==='implied'?.35:1}" title="${d}"></i>`; }).join('')}</div>`;
+}
+function vQuit(){
+  return `<div class="card"><h2>Break bad habits <button class="btn sm" onclick="editQuit()">+ Add</button></h2>
+    <p class="small muted" style="margin:0">Every day without it counts. Log urges you beat, and if you slip, log it honestly and keep going. The streak restarts, your progress does not.</p></div>
+  ${S.quits.map(quitCard).join('') || '<div class="card empty">Phone scrolling, smoking, junk food, staying up late… add the habit you want to stop.</div>'}`;
+}
+function quitCard(q){
+  const n = qStreak(q), nm = nextMile(n), pm = [0, ...MILES].filter(m => m <= n).pop(), t = today();
+  const slipToday = q.slips.some(s => s.date === t);
+  return `<div class="card"><h2><span style="cursor:pointer" onclick="openQuit('${q.id}')">${esc(q.name)}</span><button class="btn sm ghost" onclick="openQuit('${q.id}')">Calendar & stats</button></h2>
+  <div class="row" style="gap:14px"><span class="score" style="color:var(--green)">${n}</span><div><b>${n === 1 ? 'day' : 'days'} clean</b><div class="small muted">Best ${qBest(q)} · ${qUrgeTotal(q)} urges beaten · next goal ${nm} days</div></div></div>
+  <div class="bar" style="margin-top:10px"><i style="width:${clamp((n-pm)/(nm-pm)*100,0,100)}%"></i></div>
+  ${quitWeek(q)}<div class="small muted" style="margin-top:3px">Last 14 days · green clean · amber urge beaten · red slip</div>
+  <div class="row wrap" style="margin-top:12px">${slipToday ? '' : `<button class="btn sm ${q.clean[t]?'ghost':''}" onclick="qClean('${q.id}')">${q.clean[t] ? '✓ Clean today' : 'I stayed clean today'}</button>`}<button class="btn sm ghost" onclick="qUrge('${q.id}')">🆘 I feel an urge</button><button class="btn sm danger" onclick="qSlip('${q.id}')">I slipped</button></div></div>`;
+}
+function editQuit(id){
+  const q = id ? S.quits.find(x => x.id === id) : {start: today()};
+  form(id ? 'Edit' : 'Stop a bad habit', [
+    {k:'name', label:'What do you want to stop? (Phone scrolling, smoking, junk food, late nights…)', req:1},
+    {k:'why', label:'Why? Your reason shows up when an urge hits', type:'textarea'},
+    {k:'start', label:'Clean since', type:'date', req:1},
+    {k:'cost', label:`Money it costs you per day (optional, ${S.settings.currency})`, type:'number'},
+    {k:'riskTime', label:'When is it hardest? (optional, you get a reminder before)', type:'time'}
+  ], q, v => {
+    if (!v.name || !v.start){ toast('Add a name and a start date'); return false; }
+    if (id) Object.assign(q, v); else S.quits.push({id: uid(), slips: [], urges: {}, clean: {}, ...v});
+  }, id ? () => { S.quits = S.quits.filter(x => x.id !== id); } : null);
+}
+function qClean(id){
+  const q = S.quits.find(x => x.id === id), t = today();
+  if (q.clean[t]) delete q.clean[t]; else { q.clean[t] = 1; toast(phrase('streak', t+id, {n: qStreak(q), name: q.name})); }
+  save(); render();
+}
+function qUrge(id){
+  const q = S.quits.find(x => x.id === id), n = qStreak(q);
+  const m = modal(`<h3>You can ride this out 💪</h3>
+    <p class="small" style="margin-top:0">An urge rises, peaks and fades, usually within 10 to 20 minutes. You don't have to act on it.</p>
+    ${q.why ? `<div class="ins good"><b>Why you are stopping:</b><br>${esc(q.why)}</div>` : ''}
+    <div class="ins">You are on <b>day ${n}</b>. Don't trade ${n === 1 ? 'it' : 'them'} for a few minutes.</div>
+    <label>Try one now</label>
+    <div class="small" style="line-height:1.9">💧 Drink a glass of water<br>🚶 Get up and change the room you are in<br>🌬️ 10 slow breaths: in for 4, out for 6<br>🤲 Make wudu and pray two rak'ahs<br>💬 Message a friend<br>💪 15 push-ups or a 5-minute walk</div>
+    <div class="row wrap" style="margin-top:14px"><button class="btn" id="u_ok">The urge passed ✓</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  m.querySelector('#u_ok').onclick = () => {
+    const t = today(); q.urges[t] = (q.urges[t]||0) + 1; save(); closeModal(); render();
+    toast(phrase('urgeWin', t+q.urges[t], {n: qUrgeTotal(q), name: q.name}));
+  };
+}
+function qSlip(id, date){
+  const q = S.quits.find(x => x.id === id), now = new Date();
+  form('It happens. Log it and start again.', [
+    {k:'date', label:'Date', type:'date', req:1}, {k:'time', label:'Time (helps find your risky hours)', type:'time'},
+    {k:'trigger', label:'What triggered it?', type:'select', options: ['', ...TRIGGERS].map(x => [x, x || '—'])},
+    {k:'note', label:'Anything to learn from it? (optional)', type:'textarea'}
+  ], {date: date || today(), time: date ? '' : `${pad(now.getHours())}:${pad(now.getMinutes())}`}, v => {
+    q.slips.push({date: v.date, time: v.time, trigger: v.trigger, note: v.note});
+    delete q.clean[v.date];
+    setTimeout(() => toast(phrase('slip', v.date+id, {n: 0, name: q.name})), 60);
+  });
+}
+function qInsights(q){
+  const out = [], sl = q.slips.filter(s => s.date >= q.start);
+  const top = (arr) => { const c = {}; arr.forEach(x => { if (x) c[x] = (c[x]||0) + 1; }); return Object.entries(c).sort((a,b) => b[1]-a[1])[0]; };
+  const tr = top(sl.map(s => s.trigger));
+  if (tr && tr[1] >= 2) out.push(`Most slips come from <b>${esc(tr[0])}</b> (${tr[1]} times). Plan ahead for it.`);
+  const part = h => h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 21 ? 'evening' : 'night';
+  const pt = top(sl.filter(s => s.time).map(s => part(+s.time.slice(0,2))));
+  if (pt && pt[1] >= 2) out.push(`Your risky time is the <b>${pt[0]}</b>. ${q.riskTime ? 'Your reminder is set.' : 'A reminder is sent automatically before it.'}`);
+  const wd = top(sl.map(s => new Date(s.date+'T12:00:00').toLocaleDateString(undefined,{weekday:'long'})));
+  if (wd && wd[1] >= 2) out.push(`${wd[0]}s are harder for you (${wd[1]} slips).`);
+  const u = qUrgeTotal(q);
+  if (u) out.push(`You beat <b>${u}</b> urge${u>1?'s':''} and slipped ${sl.length} time${sl.length===1?'':'s'}. ${u >= sl.length ? 'You win more than you lose.' : 'Every urge you beat makes the next one weaker.'}`);
+  if (q.cost > 0) out.push(`Money not spent: <b>${money(q.cost * qCleanDays(q))}</b>.`);
+  return out;
+}
+function autoRisk(q){
+  const hrs = q.slips.filter(s => s.time).map(s => +s.time.slice(0,2)), c = {};
+  hrs.forEach(h => c[h] = (c[h]||0) + 1);
+  const best = Object.entries(c).sort((a,b) => b[1]-a[1])[0];
+  return best && best[1] >= 2 ? `${pad((+best[0] + 23) % 24)}:30` : '';
+}
+function openQuit(id){
+  const q = S.quits.find(x => x.id === id); if (!q) return;
+  const m = ui.qMonth || ym(new Date()), D = dim(m), t = today();
+  const off = (new Date(m+'-01T12:00:00').getDay() - S.settings.weekStart + 7) % 7;
+  const wds = [...Array(7)].map((_,i) => new Date(2024, 0, 7 + ((S.settings.weekStart + i) % 7)).toLocaleDateString(undefined,{weekday:'narrow'}));
+  let cells = ''; for (let i = 0; i < off; i++) cells += '<span></span>';
+  for (let n = 1; n <= D; n++){
+    const d = `${m}-${pad(n)}`, s = qStatus(q, d);
+    const op = s === 'none' ? 0 : s === 'implied' ? .25 : .75;
+    cells += `<button class="cell ${d===t?'today':''} ${d>t?'future':''}" style="height:42px" onclick="qDay('${q.id}','${d}')"><i class="heat" style="background:${Q_COL[s]};opacity:${op}"></i><span class="dn">${n}</span><span class="md">${s==='slip'?'✕':s==='urge'?'🛡️':s==='clean'?'✓':''}</span></button>`;
+  }
+  const ins = qInsights(q), slips = q.slips.slice().sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))).slice(0,8);
+  const mm = modal(`<h3>${esc(q.name)}</h3>
+    <div class="grid3">${stat('Current streak', qStreak(q) + ' days')}${stat('Best streak', qBest(q) + ' days')}${stat('Clean days', qCleanDays(q))}</div>
+    ${q.why ? `<div class="ins good"><b>Why:</b> ${esc(q.why)}</div>` : ''}
+    <div class="card row between" style="padding:4px;margin:12px 0 6px"><button class="icon-btn" data-m="-1">‹</button><b>${monthLabel(m)}</b><button class="icon-btn" data-m="1">›</button></div>
+    <div class="cal">${wds.map(w => `<span class="wd">${w}</span>`).join('')}${cells}</div>
+    <p class="small muted" style="margin:6px 0 0">✓ checked in · 🛡️ beat an urge · ✕ slip · light green = no slip logged. Tap a day to change it.</p>
+    ${ins.length ? `<label>Insights</label>${ins.map(x => `<div class="ins">${x}</div>`).join('')}` : ''}
+    ${slips.length ? `<label>Recent slips</label>${slips.map(s => `<div class="hi"><i style="background:var(--red)"></i><span class="grow">${dayLabel(s.date)}${s.time ? ' · ' + s.time : ''}${s.trigger ? ' · ' + esc(s.trigger) : ''}${s.note ? `<div class="small muted">${esc(s.note)}</div>` : ''}</span></div>`).join('')}` : ''}
+    <div class="row wrap" style="margin-top:14px"><button class="btn sm ghost" id="q_edit">Edit</button><button class="btn sm" onclick="closeModal()">Close</button></div>`);
+  mm.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { ui.qMonth = shiftMonth(m, +b.dataset.m); openQuit(id); });
+  mm.querySelector('#q_edit').onclick = () => editQuit(id);
+}
+function qDay(id, d){
+  const q = S.quits.find(x => x.id === id);
+  if (d > today() || d < q.start){ toast(d > today() ? 'That day has not come yet' : 'Before your start date'); return; }
+  const s = qStatus(q, d);
+  form(dayLabel(d) + ' · ' + q.name, [{k:'st', label:'What happened this day?', type:'select', options:[['clean','Stayed clean ✓'],['urge','Beat an urge 🛡️'],['slip','Slipped'],['none','Nothing logged']]}],
+    {st: s === 'implied' ? 'none' : s}, v => {
+      q.slips = q.slips.filter(x => x.date !== d); delete q.clean[d]; delete q.urges[d];
+      if (v.st === 'clean') q.clean[d] = 1;
+      if (v.st === 'urge'){ q.urges[d] = 1; q.clean[d] = 1; }
+      if (v.st === 'slip') q.slips.push({date: d, time: '', trigger: '', note: ''});
+      setTimeout(() => openQuit(id), 0);
+    });
+}
+
+/* ---------- smart notifications ---------- */
+const PH = {
+ ar: {
+  mT:['صباح الخير ☀️','يوم جديد 🌱','صباح النور','بداية جديدة ✨'],
+  gen:['خطوة صغيرة اليوم أحسن من خطة كبيرة ما بتبلّش.','مش لازم تكون مثالي، بس لا توقف.','اللي بتعمله كل يوم أهم من اللي بتعمله مرة وحدة.','ابدأ بأصغر مهمة، والباقي بيلحق.','﴿فإنّ مع العسر يسرا﴾ 🤍','ركّز على اليوم بس، بكرا إله وقته.','خمس دقائق بداية كافية. بلّش.','انت مش متأخر، انت ببداية طريقك.'],
+  streak:['اليوم رقم {n} بدون {name}. كمّل، انت أقوى مما بتتخيل 💪','{d} بدون {name}. كل يوم بيصير الرجوع أصعب عليها، مش عليك.','وصلت لليوم {n} بدون {name}. لا تبيع هالتعب بلحظة.','{d}! عقلك وجسمك عم يشكروك.','اليوم {n} بدون {name}. بس اليوم، وبس هالمرة.','{d} من الالتزام. هاد مش حظ، هاد انت.'],
+  mileT:'🎉 {d}!',
+  mile:['{d} بدون {name}! إنجاز حقيقي، افتخر بحالك.','مبروك! {d} بدون {name}. اللي وصّلك لهون رح يوصّلك لأبعد.','{d}! قبل فترة كان هاد الرقم حلم. هلأ صار واقع.'],
+  slip:['الزلّة مش نهاية الطريق. اليوم بداية جديدة مع {name}.','ما تحاسب حالك بقسوة. ارجع للخط اليوم، وهاد اللي بيفرق.','كل اللي نجحوا وقعوا قبل. المهم إنك رجعت.','وقعت؟ عادي. السلسلة رجعت صفر، بس تعبك ما راح.'],
+  urgeWin:['غلبتها! 🛡️ هاي رقم {n}. كل مرة بتصير أسهل.','برافو. عدد المرات اللي قلت فيها لا: {n}. هيك بتنبني الإرادة.','صمدت 💪 الرغبة راحت وانت لسا مكمّل.'],
+  low:['خفّف على حالك اليوم. خطوة وحدة صغيرة بتكفي.','مش لازم يكون يوم عظيم، بس خليه يوم ما بتستسلم فيه.','إذا اليوم ثقيل، اعمل الأساسيات بس. وهاد كفاية.','﴿لا يكلّف الله نفسًا إلا وسعها﴾. اعمل اللي بتقدر عليه.','مش لحالك. اطلع تمشّى عشر دقائق وتنفّس.'],
+  focus:['هدفك هالأسبوع: {x}. خطوة وحدة فيه اليوم؟','لا تشتّت حالك. اليوم إلك هدف واحد: {x}.','{x}: خطوة صغيرة اليوم بتقرّبك أكثر من ألف فكرة.'],
+  riskT:'لحظة صعبة؟ ({name})', riskWhy:'تذكّر ليش بدأت: {why}',
+  urge:['الرغبة بتطلع وبتنزل خلال ١٠-٢٠ دقيقة. اصمد شوي.','غيّر مكانك، اشرب مي، وخذ ١٠ أنفاس بطيئة.','انت مش مضطر تعمل اللي بتحسّه. خلّيها تمرق.'],
+  focusT:'وقت التركيز ⏱️', focusNudge:['١٥ دقيقة بس على {x}؟ التلفون بعيد والمؤقت شغّال.','خطوة صغيرة على {x} هلأ أحسن من ساعة "بعدين".','بدك تحس إنك ما ضيّعت اليوم؟ ٢٥ دقيقة على {x}.'],
+  eT:'كيف كان يومك؟ 🌙', eHab:'باقي {n} عادات ما سجّلتها', ePr:'الصلوات المسجّلة {n}/5', eQuit:'سجّل التزامك اليوم', eMood:'سجّل مزاجك',
+  eDone:['سجّلت كل إشي اليوم. يعطيك العافية 👏','يوم كامل. ارتاح، استحقيت.'],
+  eGen:['قبل ما تنام: سجّل عاداتك ومزاجك والتزامك.','دقيقة وحدة تسجّل فيها يومك بتفرق مع الوقت.','شو أحسن إشي صار معك اليوم؟ اكتبه.','قبل النوم: شو الخطوة الوحدة لبكرا؟'],
+  eMoneyOver:'⚠️ صرفك هالشهر تجاوز الميزانية.', mT1:'شهر جديد 💰', month1:'سجّل دخلك وراجع ميزانية هالشهر.',
+  staleT:'Life Organizer', stale:'افتح التطبيق عشان أحدّث تذكيراتك ورسائلك.', testT:'الإشعارات شغّالة ✅', test:'هيك رح توصلك التذكيرات والرسائل.'
+ },
+ en: {
+  mT:['Good morning ☀️','A new day 🌱','Morning','Fresh start ✨'],
+  gen:['A small step today beats a big plan you never start.','You don\'t have to be perfect. Just don\'t stop.','What you do every day matters more than what you do once.','Start with the smallest task. The rest follows.','Focus on today only.','Five minutes is enough to start.','You are not behind. You are on your way.'],
+  streak:['Day {n} without {name}. Keep going, you are stronger than you think 💪','{n} days without {name}. Every day makes going back harder for it, not for you.','Day {n} without {name}. Don\'t trade all that for one moment.','{n} days! Your mind and body thank you.','Day {n} without {name}. Just today. Just this once.','{n} days of commitment. That is not luck, that is you.'],
+  mileT:'🎉 {n} days!',
+  mile:['{n} full days without {name}! A real achievement. Be proud.','Congratulations! {n} days without {name}. What got you here will take you further.'],
+  slip:['A slip is not the end of the road. Today is a new start with {name}.','Don\'t be harsh on yourself. Get back on track today, that is what counts.','Everyone who made it fell first. What matters is that you came back.','The streak reset, your effort didn\'t.'],
+  urgeWin:['You beat it! 🛡️ That is number {n}. It gets easier each time.','Well done. {n} times you said no. That is how willpower is built.','You held on 💪 The urge passed and you are still going.'],
+  low:['Go easy on yourself today. One small step is enough.','It doesn\'t have to be a great day, just one where you don\'t give up.','If today feels heavy, do the basics only. That is enough.','You are not alone. Take a 10-minute walk and breathe.'],
+  focus:['Your focus this week: {x}. One step on it today?','Don\'t scatter yourself. Today has one goal: {x}.'],
+  riskT:'Hard moment? ({name})', riskWhy:'Remember why you started: {why}',
+  urge:['Urges rise and fall within 10–20 minutes. Hold on.','Change rooms, drink water, take 10 slow breaths.','You don\'t have to act on what you feel. Let it pass.'],
+  focusT:'Focus time ⏱️', focusNudge:['Just 15 minutes on {x}? Phone away, timer on.','A small step on {x} now beats an hour "later".'],
+  eT:'How was your day? 🌙', eHab:'{n} habits not logged yet', ePr:'Prayers logged {n}/5', eQuit:'check in on your streak', eMood:'log your mood',
+  eDone:['You logged everything today. Well done 👏','A full day. Rest, you earned it.'],
+  eGen:['Before bed: log your habits, mood and streak.','One minute to log your day adds up over time.','What was the best thing today? Write it down.'],
+  eMoneyOver:'⚠️ You are over budget this month.', mT1:'New month 💰', month1:'Log your income and review this month\'s budget.',
+  staleT:'Life Organizer', stale:'Open the app so I can refresh your reminders.', testT:'Notifications work ✅', test:'This is how your reminders and messages will look.'
+ }
+};
+const L = () => PH[S.settings.notif.lang] || PH.ar;
+function hashStr(s){ let h = 0; for (const ch of String(s)) h = (h*31 + ch.charCodeAt(0)) | 0; return Math.abs(h); }
+function dayWord(n){ n = +n; if (S.settings.notif.lang === 'en') return `${n} day${n===1?'':'s'}`; return n === 1 ? 'يوم واحد' : n === 2 ? 'يومين' : n >= 3 && n <= 10 ? `${n} أيام` : `${n} يوم`; }
+const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (_,k) => k === 'd' && v.n !== undefined ? dayWord(v.n) : (v[k] ?? ''));
+function pickL(arr, seed){ return arr[hashStr(seed) % arr.length]; }
+function phrase(kind, seed, vars){ return fill(pickL(L()[kind], seed), vars || {}); }
+const hasBridge = () => !!(window.AndroidBridge && AndroidBridge.scheduleNotifications);
+
+function buildSchedule(){
+  const N = S.settings.notif, P = L(), out = [], now = Date.now(), t = today();
+  const at = (d,hm) => { const [h,mi] = String(hm||'08:00').split(':').map(Number); const x = new Date(d+'T00:00:00'); x.setHours(h||0, mi||0, 0, 0); return x.getTime(); };
+  const push = (d,hm,title,text,tab) => { const ms = at(d,hm); if (ms > now + 30000) out.push({at: ms, title, text, tab}); };
+  const moods = Object.entries(S.journal).filter(([d,j]) => j && j.mood && d > addDays(t,-4)).map(([,j]) => j.mood);
+  const low = moods.length && moods.reduce((a,b) => a+b, 0)/moods.length <= 2.2;
+  const recentSlip = S.quits.some(q => q.slips.some(s => s.date >= addDays(t,-2)));
+  const focusTxt = S.focus && S.focus.text && S.focus.week === weekStartOf(t) && !S.focus.done ? S.focus.text : '';
+  const course = (S.courses.find(c => c.status === 'active') || {}).title || '';
+  const quits = N.quit ? S.quits : [];
+  for (let k = 0; k < 14; k++){
+    const d = addDays(t,k);
+    // morning: milestone > streak > weekly focus > general (gentler when mood has been low)
+    let title = pickL(P.mT, d), body, tab = 'home';
+    const miles = quits.map(q => ({q, n: qStreak(q) + k})).filter(x => MILES.includes(x.n));
+    if (miles.length){ title = fill(P.mileT, {n: miles[0].n}); body = fill(pickL(P.mile, d), {n: miles[0].n, name: miles[0].q.name}); tab = 'quit'; }
+    else if (quits.length){ const q = quits[k % quits.length]; body = fill(pickL(recentSlip && k < 2 ? P.slip : low && k < 3 ? P.low : P.streak, d+q.id), {n: qStreak(q)+k, name: q.name}); tab = 'quit'; }
+    else if (focusTxt && d < addDays(weekStartOf(t),7)) body = fill(pickL(P.focus, d), {x: focusTxt});
+    else body = pickL(low && k < 3 ? P.low : P.gen, d);
+    push(d, N.morning, title, body, tab);
+    // before each quit's risky time (set by you, or learned from your slips)
+    for (const q of quits){ const rt = q.riskTime || autoRisk(q); if (rt) push(d, rt, fill(P.riskT, {name: q.name}), q.why ? fill(P.riskWhy, {why: q.why}) : pickL(P.urge, d+q.id), 'quit'); }
+    // afternoon focus nudge, skipped today if you already focused
+    if (N.focus && (focusTxt || course) && !(k === 0 && rangeStats(t,t).focus > 0)) push(d, '17:00', P.focusT, fill(pickL(P.focusNudge, d), {x: focusTxt || course}), 'focus');
+    // evening check-in: today's is built from what is still missing
+    let eb;
+    if (k === 0){
+      const parts = [], r = S.deen[t] || {}, pn = PR.filter(p => r[p[0]]).length, hl = S.habits.filter(h => !h.log[t]).length;
+      if (hl) parts.push(fill(P.eHab, {n: hl}));
+      if (pn < 5) parts.push(fill(P.ePr, {n: pn}));
+      if (quits.some(q => !q.clean[t] && !q.slips.some(s => s.date === t))) parts.push(P.eQuit);
+      if (!(S.journal[t] && S.journal[t].mood)) parts.push(P.eMood);
+      eb = parts.length ? parts.join(' · ') : pickL(P.eDone, d);
+      if (N.money){ const sp = safePerDay(); if (sp !== null && sp < 0) eb += '\n' + P.eMoneyOver; }
+    } else eb = pickL(P.eGen, d);
+    push(d, N.evening, P.eT, eb, quits.length ? 'quit' : 'home');
+    if (N.money && d.slice(8) === '01') push(d, '10:00', P.mT1, P.month1, 'money');
+  }
+  push(addDays(t,14), N.morning, P.staleT, P.stale, 'home');
+  return out.sort((a,b) => a.at - b.at);
+}
+function syncNotifs(){
+  if (!hasBridge()) return;
+  try { AndroidBridge.scheduleNotifications(JSON.stringify(S.settings.notif.on ? buildSchedule() : [])); } catch(e){}
+}
+window.onNotifPermission = g => { toast(g ? 'Notifications on ✓' : 'Permission denied. Allow notifications for Life Organizer in Android settings.'); syncNotifs(); };
+window.openFrom = tab => {
+  closeModal();
+  if (tab === 'quit' || tab === 'focus'){ ui.planTab = tab; go('plan'); }
+  else if (VIEWS[tab]) go(tab);
+};
 function clearDone(){ S.tasks.forEach(x => { if (x.done) x.archived = true; }); save(); render(); toast('Cleared (still kept in your history)'); }
 
 function tmrText(){ if (!S.timer) return ''; const ms = Math.max(0, S.timer.end - Date.now()), s = Math.ceil(ms/1000); return `${pad(Math.floor(s/60))}:${pad(s%60)}`; }
@@ -882,8 +1136,8 @@ function finishFocus(complete){
 }
 function timerBar(){
   let tb = document.getElementById('timerbar');
-  if (S.timer && view !== 'plan'){
-    if (!tb){ tb = document.createElement('div'); tb.id = 'timerbar'; tb.className = 'timerbar'; tb.onclick = () => go('plan'); document.body.appendChild(tb); }
+  if (S.timer && !(view === 'plan' && ui.planTab === 'focus')){
+    if (!tb){ tb = document.createElement('div'); tb.id = 'timerbar'; tb.className = 'timerbar'; tb.onclick = () => { ui.planTab = 'focus'; go('plan'); }; document.body.appendChild(tb); }
     tb.innerHTML = `⏱️ <span class="tmr">${tmrText()}</span><span class="small" style="font-weight:500;overflow:hidden;text-overflow:ellipsis">${esc(S.timer.label)}</span>`;
   } else if (tb) tb.remove();
 }
@@ -905,12 +1159,22 @@ function inboxToTask(id){ const x = S.inbox.find(i => i.id === id); S.tasks.push
 
 /* ---------- settings + backup ---------- */
 function openSettings(){
-  const st = S.settings;
+  const st = S.settings, N = st.notif;
   const m = modal(`<h3>Settings</h3>
     <label>Your name</label><input id="s_name" value="${esc(st.name)}">
     <label>Currency</label><input id="s_cur" value="${esc(st.currency)}" placeholder="JOD, SAR, QAR, USD…">
     <label>Week starts on</label><select id="s_wk">${[[6,'Saturday'],[0,'Sunday'],[1,'Monday']].map(([v,l]) => `<option value="${v}" ${+st.weekStart===v?'selected':''}>${l}</option>`).join('')}</select>
     <label>Emergency fund target</label><select id="s_ef">${[3,6,9,12].map(v => `<option value="${v}" ${+st.efMonths===v?'selected':''}>${v} months of expenses</option>`).join('')}</select>
+    <h3 style="margin-top:22px">Smart notifications</h3>
+    ${hasBridge() ? '' : '<p class="small muted" style="margin-top:0">Notifications work in the Android app.</p>'}
+    <label class="row" style="color:var(--ink);font-size:15px"><input type="checkbox" id="n_on" style="width:auto" ${N.on?'checked':''}> Turn on reminders & encouragement</label>
+    <label>Language of the messages</label><select id="n_lang"><option value="ar" ${N.lang==='ar'?'selected':''}>العربية</option><option value="en" ${N.lang==='en'?'selected':''}>English</option></select>
+    <div class="row"><div style="flex:1"><label>Morning message</label><input type="time" id="n_m" value="${esc(N.morning)}"></div><div style="flex:1"><label>Evening check-in</label><input type="time" id="n_e" value="${esc(N.evening)}"></div></div>
+    <label class="row" style="color:var(--ink);font-size:14px"><input type="checkbox" id="n_q" style="width:auto" ${N.quit?'checked':''}> Bad-habit streaks, milestones and risky-time reminders</label>
+    <label class="row" style="color:var(--ink);font-size:14px"><input type="checkbox" id="n_f" style="width:auto" ${N.focus?'checked':''}> Afternoon focus nudge (5 pm)</label>
+    <label class="row" style="color:var(--ink);font-size:14px"><input type="checkbox" id="n_money" style="width:auto" ${N.money?'checked':''}> Money alerts (over budget, new month)</label>
+    <p class="small muted">Messages change with your progress: streak days, milestones, what you have not logged yet, and gentler words when your mood has been low. Open the app at least every two weeks to keep them coming.</p>
+    ${hasBridge() ? '<button class="btn sm ghost" id="n_test">Send a test notification</button>' : ''}
     <div class="row" style="margin-top:14px"><button class="btn" id="s_save">Save</button><button class="btn ghost" onclick="closeModal()">Close</button></div>
     <h3 style="margin-top:22px">Backup</h3>
     <p class="small muted" style="margin-top:0">Everything is stored only on this device. Export a backup regularly (for example to Google Drive or Telegram Saved Messages).</p>
@@ -919,7 +1183,19 @@ function openSettings(){
   m.querySelector('#s_save').onclick = () => {
     st.name = m.querySelector('#s_name').value.trim(); st.currency = m.querySelector('#s_cur').value.trim() || 'JOD';
     st.weekStart = +m.querySelector('#s_wk').value; st.efMonths = +m.querySelector('#s_ef').value;
-    save(); closeModal(); render(); toast('Saved');
+    const was = N.on;
+    N.on = m.querySelector('#n_on').checked; N.lang = m.querySelector('#n_lang').value;
+    N.morning = m.querySelector('#n_m').value || '08:00'; N.evening = m.querySelector('#n_e').value || '21:30';
+    N.quit = m.querySelector('#n_q').checked; N.focus = m.querySelector('#n_f').checked; N.money = m.querySelector('#n_money').checked;
+    save(); closeModal(); render(); toast('Saved'); syncNotifs();
+    if (N.on && hasBridge() && AndroidBridge.hasNotifPermission && !AndroidBridge.hasNotifPermission()) AndroidBridge.requestNotifPermission();
+    else if (N.on && !was && hasBridge()) toast('Notifications on ✓');
+  };
+  const tb = m.querySelector('#n_test');
+  if (tb) tb.onclick = () => {
+    if (AndroidBridge.hasNotifPermission && !AndroidBridge.hasNotifPermission()){ AndroidBridge.requestNotifPermission(); return; }
+    const P = PH[m.querySelector('#n_lang').value] || PH.ar, q = S.quits[0];
+    AndroidBridge.testNotification(P.testT, q ? fill(pickL(P.streak, today()), {n: qStreak(q), name: q.name}) : P.test);
   };
   const rb = m.querySelector('#s_reset');
   rb.onclick = () => { if (rb.dataset.sure){ S = clone(DEF); save(); closeModal(); go('home'); toast('All data erased'); } else { rb.dataset.sure = 1; rb.textContent = 'Tap again to erase everything'; } };
@@ -942,6 +1218,7 @@ function importData(){
 
 const VIEWS = {home: vHome, cal: vCal, money: vMoney, books: vBooks, learn: vLearn, deen: vDeen, plan: vPlan};
 render();
+setTimeout(syncNotifs, 800);
 </script>
 </body>
 </html>

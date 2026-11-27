@@ -2,6 +2,8 @@ package com.fatehallah.lifeorganizer;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
@@ -14,8 +16,11 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_REQ = 42;
+    private static final int NOTIF_REQ = 7;
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean pageReady = false;
+    private String pendingTab = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,7 +36,14 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
 
         // Open course links etc. in the phone's browser, keep the app itself inside.
+        pendingTab = tabFrom(getIntent());
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                pageReady = true;
+                openPendingTab();
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
@@ -63,6 +75,36 @@ public class MainActivity extends Activity {
         web.loadUrl("file:///android_asset/index.html");
     }
 
+    // Tapping a notification opens the matching screen.
+    private static String tabFrom(Intent i) {
+        if (i == null) return null;
+        String t = i.getStringExtra("tab");
+        return (t != null && t.matches("[a-z]{1,12}")) ? t : null;
+    }
+
+    private void openPendingTab() {
+        if (!pageReady || pendingTab == null) return;
+        web.evaluateJavascript("window.openFrom && openFrom('" + pendingTab + "')", null);
+        pendingTab = null;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pendingTab = tabFrom(intent);
+        openPendingTab();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == NOTIF_REQ) {
+            boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            web.evaluateJavascript("window.onNotifPermission && onNotifPermission(" + ok + ")", null);
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_REQ && fileCallback != null) {
@@ -90,6 +132,30 @@ public class MainActivity extends Activity {
             i.putExtra(Intent.EXTRA_SUBJECT, "Life Organizer backup");
             i.putExtra(Intent.EXTRA_TEXT, text);
             startActivity(Intent.createChooser(i, "Save backup to…"));
+        }
+
+        @JavascriptInterface
+        public void scheduleNotifications(String json) {
+            NotifyScheduler.schedule(getApplicationContext(), json);
+        }
+
+        @JavascriptInterface
+        public boolean hasNotifPermission() {
+            return Build.VERSION.SDK_INT < 33
+                    || checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestNotifPermission() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIF_REQ);
+                else web.evaluateJavascript("window.onNotifPermission && onNotifPermission(true)", null);
+            });
+        }
+
+        @JavascriptInterface
+        public void testNotification(String title, String text) {
+            NotifyScheduler.show(getApplicationContext(), title, text, "home", 999);
         }
     }
 }
